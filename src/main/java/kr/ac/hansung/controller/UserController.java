@@ -11,6 +11,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
@@ -22,6 +23,11 @@ public class UserController {
     @GetMapping("/user/password")
     public String passwordForm(@ModelAttribute("passwordChangeDto") PasswordChangeDto dto) {
         return "user/password";
+    }
+
+    @RequestMapping("/admin/password")
+    public String legacyPasswordPath() {
+        return "redirect:/user/password";
     }
 
     @PostMapping("/user/password")
@@ -42,12 +48,12 @@ public class UserController {
 
         try {
             userService.changePassword(userDetails.getUsername(), dto.getCurrentPassword(), dto.getNewPassword());
-            ra.addFlashAttribute("successMessage", "비밀번호가 변경되었습니다");
         } catch (IllegalArgumentException e) {
             bindingResult.rejectValue("currentPassword", "wrong", e.getMessage());
             return "user/password";
         }
 
+        ra.addFlashAttribute("successMessage", "비밀번호가 변경되었습니다");
         return "redirect:/home";
     }
 }

@@ -15,6 +15,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.mockito.BDDMockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -51,7 +53,7 @@ class UserControllerTest {
 
     @Test
     @WithAnonymousUser
-    @DisplayName("비인증 사용자 - 비밀번호 변경 폼 접근 시 로그인 이동")
+    @DisplayName("비인증 사용자 - 비밀번호 변경 접근 시 로그인 이동")
     void passwordForm_anonymous_redirectsToLogin() throws Exception {
         mockMvc.perform(get("/user/password"))
             .andExpect(status().is3xxRedirection())
@@ -95,7 +97,7 @@ class UserControllerTest {
 
     @Test
     @WithMockUser(username = "user@hansung.ac.kr", roles = "USER")
-    @DisplayName("인증 사용자 - 새 비밀번호 확인 불일치 시 오류 표시")
+    @DisplayName("인증 사용자 - 새 비밀번호 확인 불일치 시 저장하지 않음")
     void changePassword_mismatchConfirmPassword_returnsForm() throws Exception {
         mockMvc.perform(post("/user/password")
                 .with(csrf())
@@ -105,5 +107,7 @@ class UserControllerTest {
             .andExpect(status().isOk())
             .andExpect(view().name("user/password"))
             .andExpect(model().attributeHasFieldErrors("passwordChangeDto", "confirmPassword"));
+
+        verify(userService, never()).changePassword(anyString(), anyString(), anyString());
     }
 }
