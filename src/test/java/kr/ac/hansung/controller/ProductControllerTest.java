@@ -5,10 +5,11 @@ import kr.ac.hansung.service.ProductService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
@@ -19,18 +20,13 @@ import org.springframework.web.context.WebApplicationContext;
 
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// @SpringBootTest : 전체 Application Context 로드 (Controller, Service, Security, JPA 등 모든 Bean 등록)
-//                   Controller는 Spring Bean이므로 Spring Context 없이는 테스트 불가
-//                   webEnvironment 기본값 = MOCK (실제 Tomcat 없이 가짜 웹 환경 구성)
-// @MockitoBean    : Spring Context에 등록된 특정 Bean을 Mock으로 교체
-// @WithMockUser   : 실제 로그인 없이 인증된 사용자 흉내 (roles 지정 가능)
-// @WithAnonymousUser : 비인증 사용자 흉내
 @SpringBootTest
 @DisplayName("ProductController 테스트")
 class ProductControllerTest {
@@ -53,23 +49,48 @@ class ProductControllerTest {
 
     @Test
     @WithMockUser(roles = "USER")
-    @DisplayName("인증된 사용자 - 상품 목록 조회 성공 (200)")
+    @DisplayName("인증 사용자 - 상품 목록을 5개 단위로 페이징 조회")
     void listProducts_authenticated_returns200() throws Exception {
-        given(productService.findPage(PageRequest.of(0, 5))).willReturn(new PageImpl<>(
+        PageRequest pageRequest = PageRequest.of(0, 5, Sort.by("id").ascending());
+        given(productService.getProducts(pageRequest)).willReturn(new PageImpl<>(
             List.of(new Product("Spring Boot 4 교재", 35000, "실습서", 50)),
-            PageRequest.of(0, 5),
+            pageRequest,
             1
         ));
 
-        mockMvc.perform(get("/products"))
+        mockMvc.perform(get("/products")
+                .param("page", "0")
+                .param("size", "5"))
             .andExpect(status().isOk())
             .andExpect(view().name("products/list"))
-            .andExpect(model().attributeExists("products"));
+            .andExpect(model().attributeExists("productPage"))
+            .andExpect(model().attribute("keyword", nullValue()));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    @DisplayName("인증 사용자 - 상품명 키워드 검색과 페이징 조회")
+    void searchProducts_authenticated_returns200() throws Exception {
+        PageRequest pageRequest = PageRequest.of(0, 5, Sort.by("id").ascending());
+        given(productService.searchProducts("spring", pageRequest)).willReturn(new PageImpl<>(
+            List.of(new Product("Spring Boot 4 완벽 가이드", 35000, "Spring Boot 실습서", 50)),
+            pageRequest,
+            1
+        ));
+
+        mockMvc.perform(get("/products")
+                .param("keyword", "spring")
+                .param("page", "0")
+                .param("size", "5"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("products/list"))
+            .andExpect(model().attributeExists("productPage"))
+            .andExpect(model().attribute("keyword", "spring"));
     }
 
     @Test
     @WithAnonymousUser
-    @DisplayName("비인증 사용자 - 상품 목록 접근 시 로그인 페이지로 리다이렉트")
+    @DisplayName("비인증 사용자 - 상품 목록 접근 시 로그인 페이지로 이동")
     void listProducts_anonymous_redirectsToLogin() throws Exception {
         mockMvc.perform(get("/products"))
             .andExpect(status().is3xxRedirection())
@@ -78,7 +99,7 @@ class ProductControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("ADMIN - 상품 등록 폼 조회 성공 (200)")
+    @DisplayName("ADMIN - 상품 등록 폼 조회 성공")
     void addForm_admin_returns200() throws Exception {
         mockMvc.perform(get("/products/add"))
             .andExpect(status().isOk())
@@ -88,7 +109,7 @@ class ProductControllerTest {
 
     @Test
     @WithMockUser(roles = "USER")
-    @DisplayName("일반 USER - 상품 등록 폼 접근 시 403 (권한 없음)")
+    @DisplayName("일반 USER - 상품 등록 폼 접근 시 403")
     void addForm_user_returns403() throws Exception {
         mockMvc.perform(get("/products/add"))
             .andExpect(status().isForbidden());
@@ -96,7 +117,7 @@ class ProductControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("ADMIN - 상품 등록 POST 후 목록으로 리다이렉트")
+    @DisplayName("ADMIN - 상품 등록 POST 후 목록으로 이동")
     void saveProduct_admin_redirectsToList() throws Exception {
         given(productService.save(any())).willReturn(
             new Product("테스트 상품", 15000, "설명", 10)
@@ -114,7 +135,7 @@ class ProductControllerTest {
 
     @Test
     @WithMockUser(roles = "USER")
-    @DisplayName("일반 USER - 상품 등록 POST 시 403 (권한 없음)")
+    @DisplayName("일반 USER - 상품 등록 POST 시 403")
     void saveProduct_user_returns403() throws Exception {
         mockMvc.perform(post("/products")
                 .with(csrf())
@@ -126,7 +147,7 @@ class ProductControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("ADMIN - 상품 삭제 후 목록으로 리다이렉트")
+    @DisplayName("ADMIN - 상품 삭제 후 목록으로 이동")
     void deleteProduct_admin_redirectsToList() throws Exception {
         willDoNothing().given(productService).deleteById(1L);
 
