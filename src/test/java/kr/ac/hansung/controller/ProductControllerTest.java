@@ -108,11 +108,67 @@ class ProductControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("ADMIN - 상품 수정 폼 조회 성공")
+    void editForm_admin_returns200() throws Exception {
+        given(productService.findById(1L)).willReturn(
+            new Product("Spring Boot 4 완벽 가이드", 35000, "Spring Boot 실습서", 50)
+        );
+
+        mockMvc.perform(get("/products/1/edit"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("products/edit"))
+            .andExpect(model().attributeExists("productDto"))
+            .andExpect(model().attribute("productId", 1L));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    @DisplayName("일반 USER - 상품 수정 폼 접근 시 403")
+    void editForm_user_returns403() throws Exception {
+        mockMvc.perform(get("/products/1/edit"))
+            .andExpect(status().isForbidden())
+            .andExpect(forwardedUrl("/access-denied"));
+    }
+
+    @Test
     @WithMockUser(roles = "USER")
     @DisplayName("일반 USER - 상품 등록 폼 접근 시 403")
     void addForm_user_returns403() throws Exception {
         mockMvc.perform(get("/products/add"))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("ADMIN - 상품 수정 POST 후 목록으로 이동")
+    void editProduct_admin_redirectsToList() throws Exception {
+        given(productService.updateProduct(any(), any())).willReturn(
+            new Product("수정 상품", 25000, "수정 설명", 20)
+        );
+
+        mockMvc.perform(post("/products/1/edit")
+                .with(csrf())
+                .param("name", "수정 상품")
+                .param("price", "25000")
+                .param("description", "수정 설명")
+                .param("stock", "20"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("/products"))
+            .andExpect(flash().attribute("successMessage", "상품이 수정되었습니다."));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    @DisplayName("일반 USER - 상품 수정 POST 시 403")
+    void editProduct_user_returns403() throws Exception {
+        mockMvc.perform(post("/products/1/edit")
+                .with(csrf())
+                .param("name", "수정 상품")
+                .param("price", "25000")
+                .param("stock", "20"))
+            .andExpect(status().isForbidden())
+            .andExpect(forwardedUrl("/access-denied"));
     }
 
     @Test
